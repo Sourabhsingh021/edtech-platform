@@ -39,6 +39,18 @@ const userSchema = new mongoose.Schema(
       enum: ["student", "instructor", "admin"],
     },
 
+    image: {
+      type: String,
+    },
+
+    token: {
+      type: String,
+    },
+
+    resetPasswordExpires: {
+      type: Date,
+    },
+
     additionalDetails: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Profile",
