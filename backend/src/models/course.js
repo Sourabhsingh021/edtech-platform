@@ -20,7 +20,7 @@ const courseSchema = new mongoose.Schema(
       required: true,
     },
 
-    whatYouWillLearn: [
+    courseContent: [
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Section",
@@ -45,11 +45,17 @@ const courseSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    
+    thumbnailPublicId: {
+      type: String,
+      trim: true,
+      required: true,
+    },
 
-    tags: [
+    category: [
       {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Tag",
+        ref: "Category",
       },
     ],
 
@@ -60,7 +66,7 @@ const courseSchema = new mongoose.Schema(
       },
     ],
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export const Course = mongoose.model("Course", courseSchema);

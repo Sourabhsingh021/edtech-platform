@@ -1,7 +1,8 @@
 import jwt from "jsonwebtoken";
 import "dotenv/config";
+import { User } from "../models/user.js";
 
-export const auth = (req, res, next) => {
+export const auth = async(req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
 
@@ -18,7 +19,19 @@ export const auth = (req, res, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    req.user = decoded;
+    const user = await User.findById(decoded.id);
+    if(!user){
+      return res.status(404).json({
+        success: false,
+        message: "User no longer exist !"
+      })
+    }
+
+    req.user = {
+      id: user.id.toString(),
+      accountType: user.accountType,
+      email: user.email
+    };
 
     next();
   } catch (error) {

@@ -1,10 +1,10 @@
 import { OTP } from "../models/otp.js";
-import { Profile } from "../models/Profile.js";
-import { User } from "../models/User.js";
+import { User } from "../models/user.js";
 import generateUniqueOTP from "../utils/generateUniqueOTP.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import "dotenv/config";
+import { Profile } from "../models/profile.js";
 
 // Send OTP
 export const sendOTP = async (req, res) => {
@@ -47,9 +47,7 @@ export const sendOTP = async (req, res) => {
 };
 
 const verifyOTP = async (email, otp) => {
-  console.log(email, otp)
   const otpData = await OTP.findOne({ email }).sort({ createdAt: -1 });
-  console.log(otpData)
 
   if (!otpData) {
     return false;
@@ -124,7 +122,6 @@ export const signup = async (req, res) => {
     }
 
     const isOTPValid = await verifyOTP(normalizedEmail, otp);
-    console.log(isOTPValid,otp)
     if (!isOTPValid) {
       return res.status(401).json({
         success: false,
@@ -199,11 +196,11 @@ export const login = async (req, res) => {
         accountType: user.accountType,
       };
       const token = jwt.sign(payload, process.env.JWT_SECRET, {
-        expiresIn: "2h",
+        expiresIn: "1d",
       });
 
       const options = {
-        expires: new Date(Date.now() + 2 * 60 * 60 * 1000),
+        expires: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000),
         httpOnly: true,
         sameSite: "lax",
         secure: process.env.NODE_ENV === "production",
