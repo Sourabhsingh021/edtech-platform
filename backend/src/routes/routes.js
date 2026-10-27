@@ -6,6 +6,7 @@ import {createCategory,getAllCategories} from "../controllers/category.js";
 import { createCourse, deleteCourse, getAllCourses, updateCourse } from "../controllers/course.js";
 import { createSection, deleteSection, updateSection } from "../controllers/section.js";
 import { createSubSection, deleteSubSection, updateSubSection } from "../controllers/subSection.js";
+import { capturePayment } from "../controllers/payment.js";
 
 const router = express.Router();
 
@@ -31,5 +32,7 @@ router.delete("/deleteSection", auth, isInstructor, deleteSection);
 router.post("/createSubSection", auth, isInstructor, createSubSection);
 router.post("/updateSubSection", auth, isInstructor, updateSubSection);
 router.delete("/deleteSubSection", auth, isInstructor, deleteSubSection);
+
+router.post("/capture-payment", auth, isStudent, capturePayment);
 
 export default router;
