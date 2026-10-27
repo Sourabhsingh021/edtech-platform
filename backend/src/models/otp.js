@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import mailSender from "../utils/mailSender.js";
+import verificationEmail from "../utils/emailTemplates/verificationEmail.js";
 
 const otpSchema = new mongoose.Schema({
   email: {
@@ -19,21 +20,23 @@ const otpSchema = new mongoose.Schema({
   },
 });
 
+
 const sendVerificationMail = async (email, otp) => {
   try {
     const mailResponse = await mailSender(
       email,
-      "Verification Email from SkillBridge",
-      `Your OTP is: ${otp}`,
+      "Verify Your Email | SkillBridge",
+      verificationEmail(otp)
     );
 
-    console.log("Email sent successfully:", mailResponse);
+    console.log("Verification email sent successfully");
     return mailResponse;
   } catch (error) {
-    console.error("Error occurred while sending the email:", error);
+    console.error("Error sending verification email:", error);
     throw error;
   }
 };
+
 
 otpSchema.pre("save", async function () {
   await sendVerificationMail(this.email, this.otp);
