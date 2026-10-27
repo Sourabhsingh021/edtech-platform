@@ -2,6 +2,8 @@ import crypto from "node:crypto";
 import { User } from "../models/user.js";
 import mailSender from "../utils/mailSender.js";
 import bcrypt from "bcrypt";
+import resetPasswordEmail from "../utils/emailTemplates/resetPasswordEmail.js";
+import passwordResetSuccessEmail from "../utils/emailTemplates/passwordResetSuccessEmail.js";
 
 export const resetPasswordToken = async (req, res) => {
   try {
@@ -48,12 +50,7 @@ export const resetPasswordToken = async (req, res) => {
     await mailSender(
       normalizedEmail,
       "Reset Your SkillBridge Password",
-      `You requested a password reset for your SkillBridge account.
-
-        Use this link to reset your password within 5 minutes:
-        ${resetURL}
-
-      If you did not request this, you can ignore this email.`,
+      resetPasswordEmail(user.firstName, resetURL),
     );
 
     return res.status(200).json({
@@ -128,6 +125,16 @@ export const resetPassword = async (req, res) => {
     user.resetPasswordExpires = undefined;
 
     await user.save();
+
+    try {
+      await mailSender(
+        user.email,
+        "Your SkillBridge Password Has Been Changed",
+        passwordResetSuccessEmail(user.firstName),
+      );
+    } catch (emailError) {
+      console.error("Password reset success email failed:", emailError);
+    }
 
     return res.status(200).json({
       success: true,

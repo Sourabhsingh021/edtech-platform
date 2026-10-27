@@ -5,6 +5,8 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import "dotenv/config";
 import { Profile } from "../models/profile.js";
+import mailSender from "../utils/mailSender.js";
+import registrationSuccessEmail from "../utils/emailTemplates/registrationSuccessfull.js";
 
 // Send OTP
 export const sendOTP = async (req, res) => {
@@ -147,6 +149,15 @@ export const signup = async (req, res) => {
       additionalDetails: profileData._id,
       image: `https://api.dicebear.com/5.x/initials/svg?seed=${firstName} ${lastName}`,
     });
+    try {
+      await mailSender(
+        normalizedEmail,
+        "Welcome to SkillBridge - Registration Successful!",
+        registrationSuccessEmail(user.firstName),
+      );
+    } catch (emailError) {
+      console.error("Registration success email failed:", emailError);
+    }
 
     return res.status(201).json({
       success: true,
@@ -281,10 +292,7 @@ export const changePassword = async (req, res) => {
       });
     }
 
-    const isPasswordValid = await bcrypt.compare(
-      oldPassword,
-      user.password,
-    );
+    const isPasswordValid = await bcrypt.compare(oldPassword, user.password);
 
     if (!isPasswordValid) {
       return res.status(401).json({
