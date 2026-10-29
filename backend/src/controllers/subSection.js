@@ -142,26 +142,27 @@ export const createSubSection = async (req, res) => {
 };
 
 // UPDATE SUBSECTION
+
 export const updateSubSection = async (req, res) => {
+  let uploadedVideo;
+  let uploadedPdf;
+  let databaseUpdateSucceeded = false;
+
   try {
     const { subSectionId, title, timeDuration, description } = req.body;
 
+    //Validate subsection ID
     if (
       typeof subSectionId !== "string" ||
-      !mongoose.isValidObjectId(subSectionId) ||
-      typeof title !== "string" ||
-      !title.trim() ||
-      typeof timeDuration !== "string" ||
-      !timeDuration.trim() ||
-      typeof description !== "string" ||
-      !description.trim()
+      !mongoose.isValidObjectId(subSectionId)
     ) {
       return res.status(400).json({
         success: false,
-        message: "All valid fields are required",
+        message: "A valid subsection ID is required",
       });
     }
 
+    // Find existing subsection
     const oldSubSection = await SubSection.findById(subSectionId);
 
     if (!oldSubSection) {
@@ -171,52 +172,80 @@ export const updateSubSection = async (req, res) => {
       });
     }
 
-    const updateData = {
-      title: title.trim(),
-      timeDuration: timeDuration.trim(),
-      description: description.trim(),
-    };
+    // Prepare only supplied fields
+    const updateData = {};
 
-    const video = req.files?.video;
-    const pdf = req.files?.pdf;
-
-    if (video) {
-      const videoOptions = {
-        resourceType: "video",
-      };
-
-      if (oldSubSection.videoPublicId) {
-        videoOptions.publicId = oldSubSection.videoPublicId;
-      } else {
-        videoOptions.folder = process.env.FOLDER_NAME;
+    if (title !== undefined) {
+      if (typeof title !== "string" || !title.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "Title must be a non-empty string",
+        });
       }
 
-      const uploadedVideo = await uploadFileToCloudinary(video, videoOptions);
+      updateData.title = title.trim();
+    }
+
+    if (timeDuration !== undefined) {
+      if (typeof timeDuration !== "string" || !timeDuration.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "Time duration must be a non-empty string",
+        });
+      }
+
+      updateData.timeDuration = timeDuration.trim();
+    }
+
+    if (description !== undefined) {
+      if (typeof description !== "string" || !description.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "Description must be a non-empty string",
+        });
+      }
+
+      updateData.description = description.trim();
+    }
+
+    //Handle optional video upload
+    const video = req.files?.video;
+
+    if (video) {
+      uploadedVideo = await uploadFileToCloudinary(video, {
+        folder: process.env.FOLDER_NAME,
+        resourceType: "video",
+      });
 
       updateData.videoURL = uploadedVideo.secure_url;
       updateData.videoPublicId = uploadedVideo.public_id;
     }
 
+    // Handle optional PDF upload
+    const pdf = req.files?.pdf;
+
     if (pdf) {
-      const pdfOptions = {
+      uploadedPdf = await uploadFileToCloudinary(pdf, {
+        folder: process.env.FOLDER_NAME,
         resourceType: "raw",
-      };
-
-      if (oldSubSection.pdfPublicId) {
-        pdfOptions.publicId = oldSubSection.pdfPublicId;
-      } else {
-        pdfOptions.folder = process.env.FOLDER_NAME;
-      }
-
-      const uploadedPdf = await uploadFileToCloudinary(pdf, pdfOptions);
+      });
 
       updateData.pdfURL = uploadedPdf.secure_url;
       updateData.pdfPublicId = uploadedPdf.public_id;
     }
 
+    // Reject empty updates
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Provide at least one field or file to update",
+      });
+    }
+
+    // Update only the supplied fields
     const updatedSubSection = await SubSection.findByIdAndUpdate(
       subSectionId,
-      updateData,
+      { $set: updateData },
       {
         returnDocument: "after",
         runValidators: true,
@@ -230,6 +259,33 @@ export const updateSubSection = async (req, res) => {
       });
     }
 
+    databaseUpdateSucceeded = true;
+
+    // Remove replaced files after successful database update
+    if (
+      uploadedVideo &&
+      oldSubSection.videoPublicId &&
+      uploadedVideo.public_id !== oldSubSection.videoPublicId
+    ) {
+      try {
+        await deleteFileFromCloudinary(oldSubSection.videoPublicId, "video");
+      } catch (error) {
+        console.error("Old video cleanup failed:", error);
+      }
+    }
+
+    if (
+      uploadedPdf &&
+      oldSubSection.pdfPublicId &&
+      uploadedPdf.public_id !== oldSubSection.pdfPublicId
+    ) {
+      try {
+        await deleteFileFromCloudinary(oldSubSection.pdfPublicId, "raw");
+      } catch (error) {
+        console.error("Old PDF cleanup failed:", error);
+      }
+    }
+
     return res.status(200).json({
       success: true,
       message: "SubSection updated successfully",
@@ -237,6 +293,25 @@ export const updateSubSection = async (req, res) => {
     });
   } catch (error) {
     console.error("Update subsection error:", error);
+
+    // Clean up newly uploaded files if the DB update failed
+    if (!databaseUpdateSucceeded) {
+      if (uploadedVideo?.public_id) {
+        try {
+          await deleteFileFromCloudinary(uploadedVideo.public_id, "video");
+        } catch (cleanupError) {
+          console.error("New video cleanup failed:", cleanupError);
+        }
+      }
+
+      if (uploadedPdf?.public_id) {
+        try {
+          await deleteFileFromCloudinary(uploadedPdf.public_id, "raw");
+        } catch (cleanupError) {
+          console.error("New PDF cleanup failed:", cleanupError);
+        }
+      }
+    }
 
     return res.status(500).json({
       success: false,

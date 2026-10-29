@@ -25,18 +25,18 @@ router.get("/getAllCategories", getAllCategories);
 
 //course
 router.post("/createCourse", auth, isInstructor, createCourse);
-router.post("/updateCourse", auth, isInstructor, updateCourse);
+router.patch("/updateCourse", auth, isInstructor, updateCourse);
 router.post("/deleteCourse", auth, isInstructor, deleteCourse);
 router.get("/getAllCourses", getAllCourses);
 
 //section
 router.post("/createSection", auth, isInstructor, createSection);
-router.post("/updateSection", auth, isInstructor, updateSection);
+router.patch("/updateSection", auth, isInstructor, updateSection);
 router.delete("/deleteSection", auth, isInstructor, deleteSection);
 
 //sub-section
 router.post("/createSubSection", auth, isInstructor, createSubSection);
-router.post("/updateSubSection", auth, isInstructor, updateSubSection);
+router.patch("/updateSubSection", auth, isInstructor, updateSubSection);
 router.delete("/deleteSubSection", auth, isInstructor, deleteSubSection);
 
 //payments

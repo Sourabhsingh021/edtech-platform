@@ -181,8 +181,22 @@ export const createCourse = async (req, res) => {
 export const getAllCourses = async (req, res) => {
   try {
     const courses = await Course.find({})
-      .populate("category", "categoryName description")
-      .populate("instructor", "firstName lastName image")
+      .populate({
+        path: "instructor",
+        select: "-password",
+      })
+      .populate({
+        path: "courseContent",
+        populate: {
+          path: "subSection",
+        },
+      })
+      .populate("ratingAndReviews")
+      .populate("category")
+      .populate({
+        path: "studentEnrolled",
+        select: "firstName lastName email image",
+      })
       .exec();
 
     return res.status(200).json({
@@ -200,76 +214,32 @@ export const getAllCourses = async (req, res) => {
   }
 };
 
+
 export const updateCourse = async (req, res) => {
   let thumbnailImage;
+  let databaseUpdateSucceeded = false;
 
   try {
-    const { courseName, courseDescription, price, courseId } = req.body;
-
-    let categoryIds;
-    try {
-      categoryIds = JSON.parse(req.body.categoryId);
-    } catch {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid categoryId format",
-      });
-    }
-
-    // Validate required fields
-    if (
-      typeof courseName !== "string" ||
-      typeof courseDescription !== "string" ||
-      !courseName.trim() ||
-      !courseDescription.trim()
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Course name and description are required",
-      });
-    }
-
-    // Validate price
-    if (
-      price === undefined ||
-      price === null ||
-      String(price).trim() === "" ||
-      !Number.isFinite(Number(price)) ||
-      Number(price) < 0
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Price must be a valid non-negative number",
-      });
-    }
+    const {
+      courseId,
+      courseName,
+      courseDescription,
+      price,
+      categoryId,
+    } = req.body;
 
     // Validate course ID
-    if (!mongoose.isValidObjectId(courseId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid course ID",
-      });
-    }
-
-    // Validate categories
-    if (!Array.isArray(categoryIds) || categoryIds.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "At least one category is required",
-      });
-    }
-
     if (
-      categoryIds.some((id) => !mongoose.isValidObjectId(id)) ||
-      new Set(categoryIds.map(String)).size !== categoryIds.length
+      typeof courseId !== "string" ||
+      !mongoose.isValidObjectId(courseId)
     ) {
       return res.status(400).json({
         success: false,
-        message: "Category IDs must be valid and unique",
+        message: "A valid course ID is required",
       });
     }
 
-    // Find the course
+    // Find course
     const course = await Course.findById(courseId);
 
     if (!course) {
@@ -280,50 +250,146 @@ export const updateCourse = async (req, res) => {
     }
 
     // Verify ownership
-    const instructorId = req.user.id;
-
-    if (course.instructor.toString() !== instructorId) {
+    if (course.instructor.toString() !== req.user.id) {
       return res.status(403).json({
         success: false,
         message: "You are not authorized to update this course",
       });
     }
 
-    // Verify that all requested categories exist
-    const existingCategories = await Category.find({
-      _id: { $in: categoryIds },
-    }).select("_id");
+    // Prepare only the fields provided by the client
+    const updatedData = {};
+    let categoryIds;
+    let categoriesProvided = false;
 
-    if (existingCategories.length !== categoryIds.length) {
-      return res.status(404).json({
-        success: false,
-        message: "One or more categories do not exist",
-      });
+    // Course name
+    if (courseName !== undefined) {
+      if (
+        typeof courseName !== "string" ||
+        !courseName.trim()
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Course name must be a non-empty string",
+        });
+      }
+
+      updatedData.courseName = courseName.trim();
     }
 
-    // Prepare updated fields
-    const updatedData = {
-      courseName: courseName.trim(),
-      courseDescription: courseDescription.trim(),
-      price: Number(price),
-      category: categoryIds,
-    };
+    // Course description
+    if (courseDescription !== undefined) {
+      if (
+        typeof courseDescription !== "string" ||
+        !courseDescription.trim()
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Course description must be a non-empty string",
+        });
+      }
+
+      updatedData.courseDescription = courseDescription.trim();
+    }
+
+    // Price
+    if (price !== undefined) {
+      if (
+        price === null ||
+        String(price).trim() === "" ||
+        !Number.isFinite(Number(price)) ||
+        Number(price) < 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Price must be a valid non-negative number",
+        });
+      }
+
+      updatedData.price = Number(price);
+    }
+
+    // Categories: parse and validate only when supplied
+    if (categoryId !== undefined) {
+      categoriesProvided = true;
+
+      try {
+        categoryIds =
+          typeof categoryId === "string"
+            ? JSON.parse(categoryId)
+            : categoryId;
+      } catch {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid categoryId format",
+        });
+      }
+
+      if (
+        !Array.isArray(categoryIds) ||
+        categoryIds.length === 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "At least one category is required",
+        });
+      }
+
+      if (
+        categoryIds.some(
+          (id) =>
+            typeof id !== "string" ||
+            !mongoose.isValidObjectId(id),
+        ) ||
+        new Set(categoryIds.map((id) => id.toLowerCase())).size !==
+          categoryIds.length
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Category IDs must be valid and unique",
+        });
+      }
+
+      const existingCategories = await Category.find({
+        _id: { $in: categoryIds },
+      }).select("_id");
+
+      if (existingCategories.length !== categoryIds.length) {
+        return res.status(404).json({
+          success: false,
+          message: "One or more categories do not exist",
+        });
+      }
+
+      updatedData.category = categoryIds;
+    }
 
     // Upload a new thumbnail only if supplied
     if (req.files?.thumbnail) {
-      thumbnailImage = await uploadFileToCloudinary(req.files.thumbnail, {
-        folder: process.env.FOLDER_NAME,
-        resourceType: "image",
-        height: 300,
-        quality: "auto",
-      });
+      thumbnailImage = await uploadFileToCloudinary(
+        req.files.thumbnail,
+        {
+          folder: process.env.FOLDER_NAME,
+          resourceType: "image",
+          height: 300,
+          quality: "auto",
+        },
+      );
 
       updatedData.thumbnail = thumbnailImage.secure_url;
       updatedData.thumbnailPublicId = thumbnailImage.public_id;
     }
 
+    // Reject a request that contains no editable fields
+    if (Object.keys(updatedData).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Provide at least one field to update",
+      });
+    }
+
+    // Update course and category references transactionally
     const updatedCourse = await withTransaction(async (session) => {
-      // Update the course
       const courseAfterUpdate = await Course.findByIdAndUpdate(
         courseId,
         { $set: updatedData },
@@ -338,37 +404,50 @@ export const updateCourse = async (req, res) => {
         throw new Error("Course not found during update");
       }
 
-      // Add the course to the newly selected categories
-      const updatedCategories = await Category.updateMany(
-        { _id: { $in: categoryIds } },
-        { $addToSet: { courses: courseAfterUpdate._id } },
-        { session },
-      );
+      // Only modify category relationships if categoryId was supplied
+      if (categoriesProvided) {
+        const updatedCategories = await Category.updateMany(
+          { _id: { $in: categoryIds } },
+          { $addToSet: { courses: courseAfterUpdate._id } },
+          { session },
+        );
 
-      if (updatedCategories.matchedCount !== categoryIds.length) {
-        throw new Error("One or more categories were not found");
+        if (updatedCategories.matchedCount !== categoryIds.length) {
+          throw new Error("One or more categories were not found");
+        }
+
+        // Remove the course from categories no longer selected
+        await Category.updateMany(
+          {
+            _id: { $nin: categoryIds },
+            courses: courseAfterUpdate._id,
+          },
+          { $pull: { courses: courseAfterUpdate._id } },
+          { session },
+        );
       }
-
-      // Remove the course from categories it no longer belongs to
-      await Category.updateMany(
-        { _id: { $nin: categoryIds }, courses: courseAfterUpdate._id },
-        { $pull: { courses: courseAfterUpdate._id } },
-        { session },
-      );
 
       return courseAfterUpdate;
     });
 
-    // Delete the old thumbnail only after the database update succeeds
+    databaseUpdateSucceeded = true;
+
+    // Delete the old thumbnail after the database update succeeds
     if (
       thumbnailImage?.public_id &&
       course.thumbnailPublicId &&
       thumbnailImage.public_id !== course.thumbnailPublicId
     ) {
       try {
-        await deleteFileFromCloudinary(course.thumbnailPublicId, "image");
+        await deleteFileFromCloudinary(
+          course.thumbnailPublicId,
+          "image",
+        );
       } catch (cleanupError) {
-        console.error("Old thumbnail cleanup failed:", cleanupError);
+        console.error(
+          "Old thumbnail cleanup failed:",
+          cleanupError,
+        );
       }
     }
 
@@ -380,12 +459,18 @@ export const updateCourse = async (req, res) => {
   } catch (error) {
     console.error("Update course failed:", error);
 
-    // If the database update failed, remove the newly uploaded thumbnail
-    if (thumbnailImage?.public_id) {
+    // If the DB update did not succeed, clean up the new upload
+    if (!databaseUpdateSucceeded && thumbnailImage?.public_id) {
       try {
-        await deleteFileFromCloudinary(thumbnailImage.public_id, "image");
+        await deleteFileFromCloudinary(
+          thumbnailImage.public_id,
+          "image",
+        );
       } catch (cleanupError) {
-        console.error("New thumbnail cleanup failed:", cleanupError);
+        console.error(
+          "New thumbnail cleanup failed:",
+          cleanupError,
+        );
       }
     }
 
@@ -395,6 +480,7 @@ export const updateCourse = async (req, res) => {
     });
   }
 };
+
 
 export const deleteCourse = async (req, res) => {
   try {
