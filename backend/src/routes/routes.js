@@ -8,6 +8,7 @@ import { createSection, deleteSection, updateSection } from "../controllers/sect
 import { createSubSection, deleteSubSection, updateSubSection } from "../controllers/subSection.js";
 import { capturePayment } from "../controllers/payment.js";
 import { createRatingAndReview, deleteRatingAndReview, updateRatingAndReview } from "../controllers/ratingAndReview.js";
+import { deleteAccount, updateProfile } from "../controllers/profile.js";
 
 const router = express.Router();
 
@@ -18,6 +19,8 @@ router.post("/login", login);
 router.post("/change-password", auth, changePassword);
 router.post("/reset-password-token", resetPasswordToken);
 router.post("/reset-password", resetPassword);
+router.patch("/updateProfile", auth, updateProfile);
+router.delete("/deleteAccount", auth, deleteAccount);
 
 //category
 router.post("/createCategory", auth, createCategory);
