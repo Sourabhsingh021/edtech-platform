@@ -1,5 +1,5 @@
 import express from "express";
-import { changePassword, login, sendOTP, signup } from "../controllers/auth.js";
+import { changePassword, login, sendOTP, signup , logout} from "../controllers/auth.js";
 import { auth, isStudent, isInstructor, isAdmin } from "../middlewares/auth.js";
 import { resetPassword, resetPasswordToken } from "../controllers/resetPassword.js";
 import {createCategory,getAllCategories} from "../controllers/category.js";
@@ -9,6 +9,7 @@ import { createSubSection, deleteSubSection, updateSubSection } from "../control
 import { capturePayment } from "../controllers/payment.js";
 import { createRatingAndReview, deleteRatingAndReview, updateRatingAndReview } from "../controllers/ratingAndReview.js";
 import { deleteAccount, updateProfile } from "../controllers/profile.js";
+import { getUserDetails } from "../controllers/user.js";
 
 const router = express.Router();
 
@@ -21,6 +22,7 @@ router.post("/reset-password-token", resetPasswordToken);
 router.post("/reset-password", resetPassword);
 router.patch("/updateProfile", auth, updateProfile);
 router.delete("/deleteAccount", auth, deleteAccount);
+router.post("/logout", logout);
 
 //category
 router.post("/createCategory", auth, createCategory);
@@ -49,5 +51,8 @@ router.post("/capture-payment", auth, isStudent, capturePayment);
 router.post("/courses/:courseId/reviews", auth, isStudent, createRatingAndReview);
 router.patch("/reviews/:reviewId", auth, isStudent, updateRatingAndReview);
 router.delete("/reviews/:reviewId", auth, isStudent, deleteRatingAndReview);
+
+//fetch user details
+router.get("/me", auth, getUserDetails);
 
 export default router;
